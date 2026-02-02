@@ -1,0 +1,179 @@
+@model string
+@{
+    ViewData["Title"] = Localizer["Ticket.Title"].Value + " " + Model;
+}
+
+<div id="app">
+    <div class="page-header">
+        <a :href="ticket ? '/projects/' + ticket.projectId : '/'" class="btn btn-secondary" style="margin-right: 1rem;">← {{ t('Ticket.BackToProject') }}</a>
+        <h1 v-if="ticket"><span class="ticket-key">{{ ticket.key }}</span> {{ ticket.title }}</h1>
+    </div>
+    <div v-if="loading" class="loading">{{ t('Projects.Loading') }}</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else-if="ticket" class="ticket-detail">
+        <div class="grid" style="grid-template-columns: 1fr 280px;">
+            <div>
+                <div class="card">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <span :class="'badge badge-' + statusClass(ticket.status)">{{ statusLabel(ticket.status) }}</span>
+                        <span :class="'priority-' + priorityClass(ticket.priority)">{{ t('Ticket.Priority') }}: {{ priorityLabel(ticket.priority) }}</span>
+                    </div>
+                    <div v-if="ticket.description" style="white-space: pre-wrap; margin-bottom: 1rem;">{{ ticket.description }}</div>
+                    <div style="color: var(--text-muted); font-size: 0.875rem;">
+                        {{ t('Ticket.Reporter') }}: {{ ticket.reporterName }} · {{ t('Ticket.CreatedAt') }} {{ formatDate(ticket.createdAt) }}
+                    </div>
+                </div>
+                <h3>{{ t('Ticket.Comments') }}</h3>
+                <div v-for="c in ticket.comments" :key="c.id" class="card" style="margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.875rem; color: var(--text-muted);">{{ c.authorName }} · {{ formatDate(c.createdAt) }}</div>
+                    <div style="white-space: pre-wrap;">{{ c.body }}</div>
+                </div>
+                <div class="card">
+                    <div class="form-group">
+                        <label>{{ t('Ticket.AddComment') }}</label>
+                        <textarea v-model="newComment" rows="3" :placeholder="t('Ticket.AddCommentPlaceholder')"></textarea>
+                    </div>
+                    <button class="btn btn-primary" @@click="addComment">{{ t('Ticket.AddCommentSubmit') }}</button>
+                </div>
+            </div>
+            <div>
+                <div class="card">
+                    <h4 style="margin-top: 0;">{{ t('Ticket.Details') }}</h4>
+                    <div class="form-group">
+                        <label>{{ t('Ticket.Status') }}</label>
+                        <select :value="ticket.status" @@change="updateStatus($event.target.value)">
+                            <option value="0">{{ t('Ticket.StatusToDo') }}</option>
+                            <option value="1">{{ t('Ticket.StatusInProgress') }}</option>
+                            <option value="2">{{ t('Ticket.StatusInReview') }}</option>
+                            <option value="3">{{ t('Ticket.StatusDone') }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('Ticket.Assigned') }}</label>
+                        <select :value="ticket.assigneeId ?? ''" @@change="updateAssignee($event.target.value)">
+                            <option value="">{{ t('Ticket.Unassigned') }}</option>
+                            <option v-for="u in users" :key="u.id" :value="u.id">{{ u.displayName }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ t('Ticket.Priority') }}</label>
+                        <select :value="ticket.priority" @@change="updatePriority($event.target.value)">
+                            <option value="0">{{ t('Ticket.PriorityLowest') }}</option>
+                            <option value="1">{{ t('Ticket.PriorityLow') }}</option>
+                            <option value="2">{{ t('Ticket.PriorityMedium') }}</option>
+                            <option value="3">{{ t('Ticket.PriorityHigh') }}</option>
+                            <option value="4">{{ t('Ticket.PriorityHighest') }}</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const ticketKey = '@Html.Raw(Model)';
+const { createApp } = Vue;
+const statusKeys = { 0: 'Ticket.StatusToDo', 1: 'Ticket.StatusInProgress', 2: 'Ticket.StatusInReview', 3: 'Ticket.StatusDone' };
+const priorityKeys = { 0: 'Ticket.PriorityLowest', 1: 'Ticket.PriorityLow', 2: 'Ticket.PriorityMedium', 3: 'Ticket.PriorityHigh', 4: 'Ticket.PriorityHighest' };
+createApp({
+    data() {
+        return {
+            ticket: null,
+            users: [],
+            loading: true,
+            error: null,
+            newComment: '',
+            translations: {}
+        };
+    },
+    mounted() {
+        this.loadTranslations().then(() => this.load());
+        fetch('/api/UsersApi').then(r => r.json()).then(u => this.users = u).catch(() => {});
+    },
+    methods: {
+        async loadTranslations() {
+            const locale = document.documentElement.lang || 'pl';
+            try {
+                const r = await fetch('/locales/' + locale + '.json');
+                if (r.ok) this.translations = await r.json();
+            } catch (_) {}
+        },
+        t(key, ...args) {
+            let s = this.translations[key] ?? key;
+            args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
+            return s;
+        },
+        statusLabel(s) { return this.t(statusKeys[s] ?? 'Ticket.StatusToDo'); },
+        statusClass(s) {
+            const c = { 0: 'todo', 1: 'progress', 2: 'review', 3: 'done' };
+            return c[s] ?? 'todo';
+        },
+        priorityLabel(p) { return this.t(priorityKeys[p] ?? 'Ticket.PriorityMedium'); },
+        priorityClass(p) {
+            const c = { 0: 'lowest', 1: 'low', 2: 'medium', 3: 'high', 4: 'highest' };
+            return c[p] ?? 'medium';
+        },
+        formatDate(d) {
+            if (!d) return '';
+            const dt = new Date(d);
+            return dt.toLocaleDateString('pl-PL') + ' ' + dt.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        },
+        async load() {
+            try {
+                this.loading = true;
+                this.error = null;
+                const r = await fetch('/api/TicketsApi/' + encodeURIComponent(ticketKey));
+                if (!r.ok) throw new Error(this.t('Ticket.NotFound'));
+                this.ticket = await r.json();
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        async updateStatus(status) {
+            await this.apiUpdate({ status: parseInt(status, 10) });
+        },
+        async updateAssignee(assigneeId) {
+            await this.apiUpdate({ assigneeId: assigneeId === '' ? null : parseInt(assigneeId, 10) });
+        },
+        async updatePriority(priority) {
+            await this.apiUpdate({ priority: parseInt(priority, 10) });
+        },
+        async apiUpdate(payload) {
+            if (!this.ticket) return;
+            try {
+                const r = await fetch('/api/TicketsApi/' + this.ticket.id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!r.ok) throw new Error(this.t('Ticket.ErrorUpdate'));
+                this.ticket = await r.json();
+            } catch (e) {
+                alert(e.message);
+            }
+        },
+        async addComment() {
+            if (!this.newComment.trim() || !this.ticket) return;
+            try {
+                const r = await fetch('/api/TicketsApi/' + this.ticket.id + '/comments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body: this.newComment })
+                });
+                if (!r.ok) throw new Error(this.t('Ticket.ErrorAddComment'));
+                const comment = await r.json();
+                this.ticket.comments = this.ticket.comments || [];
+                this.ticket.comments.push(comment);
+                this.newComment = '';
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+    }
+}).mount('#app');
+</script>
+}

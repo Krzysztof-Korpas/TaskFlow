@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - @Localizer["App.Title"]</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="app-header">
+        <nav class="nav">
+            <a href="/" class="logo">STC</a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a href="/" class="nav-link">@Localizer["Nav.Projects"]</a>
+                <a href="/account" class="nav-user">@User.Identity.Name</a>
+                <form action="/logout" method="post" class="nav-logout">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-secondary btn-sm">@Localizer["Nav.Logout"]</button>
+                </form>
+            }
+            else
+            {
+                <a asp-controller="Account" asp-action="Login" class="nav-link">@Localizer["Nav.Login"]</a>
+                <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-sm">@Localizer["Nav.Register"]</a>
+            }
+        </nav>
+    </header>
+    <main class="main">
+        @RenderBody()
+    </main>
+    <footer class="app-footer">
+        <span>@Localizer["Footer.Copyright"] &copy; @DateTime.UtcNow.Year</span>
+    </footer>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

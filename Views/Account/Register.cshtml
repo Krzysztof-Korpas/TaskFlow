@@ -1,0 +1,41 @@
+@model TaskFlow.Models.ViewModel.RegisterViewModel
+@{
+    ViewData["Title"] = Localizer["Auth.Register"].Value;
+    var returnUrl = ViewData["ReturnUrl"] as string ?? "/";
+}
+
+<div class="auth-page">
+    <div class="auth-card card">
+        <h1>@Localizer["Auth.Register"]</h1>
+        <form asp-controller="Account" asp-action="Register" asp-route-returnUrl="@returnUrl" method="post">
+            <div asp-validation-summary="ModelOnly" class="error" style="margin-bottom: 1rem;"></div>
+            <div class="form-group">
+                <label asp-for="Email"></label>
+                <input asp-for="Email" type="email" autocomplete="username" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="DisplayName"></label>
+                <input asp-for="DisplayName" autocomplete="name" />
+            </div>
+            <div class="form-group">
+                <label asp-for="Password"></label>
+                <input asp-for="Password" type="password" autocomplete="new-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="ConfirmPassword"></label>
+                <input asp-for="ConfirmPassword" type="password" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@Localizer["Auth.RegisterSubmit"]</button>
+                <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="@returnUrl" class="btn btn-secondary">@Localizer["Auth.AlreadyHaveAccount"]</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

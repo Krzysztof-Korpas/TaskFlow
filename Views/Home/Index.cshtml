@@ -1,0 +1,108 @@
+@{
+    ViewData["Title"] = Localizer["Projects.Title"].Value;
+}
+
+<div id="app">
+    <div class="page-header">
+        <h1>{{ t('Projects.Title') }}</h1>
+        <button class="btn btn-primary" @@click="showCreateModal = true">{{ t('Projects.NewProject') }}</button>
+    </div>
+    <div v-if="loading" class="loading">{{ t('Projects.Loading') }}</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else class="grid grid-2">
+        <a v-for="p in projects" :key="p.id" :href="'/projects/' + p.id" class="card">
+            <div class="ticket-key">{{ p.key }}</div>
+            <div style="font-size: 1.1rem; margin: 0.25rem 0;">{{ p.name }}</div>
+            <div style="color: var(--text-muted); font-size: 0.875rem;">{{ t('Projects.TicketCount', p.ticketCount) }}</div>
+        </a>
+    </div>
+
+    <div v-if="showCreateModal" class="modal-overlay" @@click.self="showCreateModal = false">
+        <div class="modal">
+            <h2>{{ t('Projects.NewProject') }}</h2>
+            <div class="form-group">
+                <label>{{ t('Projects.KeyLabel') }}</label>
+                <input v-model="newProject.key" :placeholder="t('Projects.KeyPlaceholder')" maxlength="10" />
+            </div>
+            <div class="form-group">
+                <label>{{ t('Projects.NameLabel') }}</label>
+                <input v-model="newProject.name" :placeholder="t('Projects.NamePlaceholder')" />
+            </div>
+            <div class="form-group">
+                <label>{{ t('Projects.DescriptionLabel') }}</label>
+                <textarea v-model="newProject.description" rows="2" :placeholder="t('Projects.DescriptionPlaceholder')"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @@click="showCreateModal = false">{{ t('Projects.Cancel') }}</button>
+                <button class="btn btn-primary" @@click="createProject">{{ t('Projects.Create') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const { createApp } = Vue;
+createApp({
+    data() {
+        return {
+            projects: [],
+            loading: true,
+            error: null,
+            showCreateModal: false,
+            newProject: { key: '', name: '', description: '' },
+            translations: {}
+        };
+    },
+    mounted() {
+        this.loadTranslations().then(() => this.load());
+    },
+    methods: {
+        async loadTranslations() {
+            const locale = document.documentElement.lang || 'pl';
+            try {
+                const r = await fetch('/locales/' + locale + '.json');
+                if (r.ok) this.translations = await r.json();
+            } catch (_) {}
+        },
+        t(key, ...args) {
+            let s = this.translations[key] ?? key;
+            args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
+            return s;
+        },
+        async load() {
+            try {
+                this.loading = true;
+                this.error = null;
+                const r = await fetch('/api/ProjectsApi');
+                if (!r.ok) throw new Error(this.t('Projects.ErrorLoad'));
+                this.projects = await r.json();
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        async createProject() {
+            if (!this.newProject.key.trim() || !this.newProject.name.trim()) return;
+            try {
+                const r = await fetch('/api/ProjectsApi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.newProject)
+                });
+                if (!r.ok) {
+                    const t = await r.text();
+                    throw new Error(t || this.t('Projects.ErrorCreate'));
+                }
+                this.showCreateModal = false;
+                this.newProject = { key: '', name: '', description: '' };
+                await this.load();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+    }
+}).mount('#app');
+</script>
+}

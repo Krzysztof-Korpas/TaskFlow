@@ -1,0 +1,242 @@
+@model int
+@{
+    ViewData["Title"] = Localizer["Project.Title"].Value;
+}
+
+<div id="app">
+    <div class="page-header">
+        <a href="/" class="btn btn-secondary" style="margin-right: 0.5rem;">← {{ t('Nav.Projects') }}</a>
+        <a v-if="project" :href="'/projects/' + projectId + '/kanban'" class="btn btn-secondary" style="margin-right: 1rem;">{{ t('Project.KanbanBoard') }}</a>
+        <h1 v-if="project">{{ project.key }} – {{ project.name }}</h1>
+        <button class="btn btn-primary" @@click="showCreateTicket = true">{{ t('Project.NewTask') }}</button>
+    </div>
+    <div v-if="loading" class="loading">{{ t('Projects.Loading') }}</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else>
+        <div v-if="project?.description" class="card" style="margin-bottom: 1rem; color: var(--text-muted);">{{ project.description }}</div>
+        
+        <!-- Admin Section: User Management -->
+        <div v-if="isAdmin" class="card" style="margin-bottom: 1rem;">
+            <h3 style="margin-top: 0;">{{ t('Admin.ProjectAccess') }}</h3>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: inline-block; margin-right: 0.5rem;">{{ t('Admin.AddUserToProject') }}:</label>
+                <select v-model="selectedUserId" style="display: inline-block; width: auto; margin-right: 0.5rem;">
+                    <option :value="null">—</option>
+                    <option v-for="u in availableUsers" :key="u.id" :value="u.id">{{ u.displayName }}</option>
+                </select>
+                <button class="btn btn-primary btn-sm" @@click="addUserToProject">{{ t('Projects.Create') }}</button>
+            </div>
+            <div>
+                <strong>{{ t('Admin.AssignedUsers') }}:</strong>
+                <div v-if="projectUsers.length === 0" style="color: var(--text-muted); margin-top: 0.5rem;">
+                    {{ t('Admin.NoUsersAssigned') }}
+                </div>
+                <div v-else style="margin-top: 0.5rem;">
+                    <div v-for="pu in projectUsers" :key="pu.id" style="display: flex; align-items: center; padding: 0.5rem; background: var(--bg); border-radius: 4px; margin-bottom: 0.5rem;">
+                        <span style="flex: 1;">{{ pu.displayName }} ({{ pu.email }})</span>
+                        <button class="btn btn-danger btn-sm" @@click="removeUserFromProject(pu.id)">{{ t('Admin.RemoveUserFromProject') }}</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <a v-for="ticket in tickets" :key="ticket.id" :href="'/tickets/' + ticket.key" class="card">
+                <span class="ticket-key">{{ ticket.key }}</span>
+                <span :class="'badge badge-' + statusClass(ticket.status)" style="margin-left: 0.5rem;">{{ statusLabel(ticket.status) }}</span>
+                <div style="margin-top: 0.5rem;">{{ ticket.title }}</div>
+                <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">
+                    {{ ticket.assigneeName || t('Ticket.Unassigned') }} · {{ ticket.priority }}
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div v-if="showCreateTicket" class="modal-overlay" @@click.self="showCreateTicket = false">
+        <div class="modal">
+            <h2>{{ t('Project.NewTask') }}</h2>
+            <div class="form-group">
+                <label>{{ t('Ticket.TitleLabel') }}</label>
+                <input v-model="newTicket.title" :placeholder="t('Ticket.TitlePlaceholder')" />
+            </div>
+            <div class="form-group">
+                <label>{{ t('Ticket.DescriptionLabel') }}</label>
+                <textarea v-model="newTicket.description" rows="3" :placeholder="t('Ticket.DescriptionPlaceholder')"></textarea>
+            </div>
+            <div class="form-group">
+                <label>{{ t('Ticket.TypeLabel') }}</label>
+                <select v-model="newTicket.type">
+                    <option value="0">{{ t('Ticket.TypeTask') }}</option>
+                    <option value="1">{{ t('Ticket.TypeBug') }}</option>
+                    <option value="2">{{ t('Ticket.TypeFeature') }}</option>
+                    <option value="3">{{ t('Ticket.TypeOther') }}</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>{{ t('Ticket.PriorityLabel') }}</label>
+                <select v-model="newTicket.priority">
+                    <option value="0">{{ t('Ticket.PriorityLowest') }}</option>
+                    <option value="1">{{ t('Ticket.PriorityLow') }}</option>
+                    <option value="2">{{ t('Ticket.PriorityMedium') }}</option>
+                    <option value="3">{{ t('Ticket.PriorityHigh') }}</option>
+                    <option value="4">{{ t('Ticket.PriorityHighest') }}</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>{{ t('Ticket.AssignToLabel') }}</label>
+                <select v-model="newTicket.assigneeId">
+                    <option :value="null">—</option>
+                    <option v-for="u in users" :key="u.id" :value="u.id">{{ u.displayName }}</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @@click="showCreateTicket = false">{{ t('Projects.Cancel') }}</button>
+                <button class="btn btn-primary" @@click="createTicket">{{ t('Projects.Create') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const projectId = @Model;
+const { createApp } = Vue;
+const statusKeys = { 0: 'Ticket.StatusToDo', 1: 'Ticket.StatusInProgress', 2: 'Ticket.StatusInReview', 3: 'Ticket.StatusDone' };
+createApp({
+    data() {
+        return {
+            projectId,
+            project: null,
+            tickets: [],
+            users: [],
+            projectUsers: [],
+            isAdmin: false,
+            selectedUserId: null,
+            loading: true,
+            error: null,
+            showCreateTicket: false,
+            newTicket: { title: '', description: '', type: 0, priority: 2, assigneeId: null },
+            translations: {}
+        };
+    },
+    computed: {
+        availableUsers() {
+            const assignedIds = this.projectUsers.map(u => u.id);
+            return this.users.filter(u => !assignedIds.includes(u.id));
+        }
+    },
+    mounted() {
+        this.loadTranslations().then(() => this.load());
+        fetch('/api/UsersApi').then(r => r.json()).then(u => this.users = u).catch(() => {});
+        this.checkAdmin();
+    },
+    methods: {
+        async loadTranslations() {
+            const locale = document.documentElement.lang || 'pl';
+            try {
+                const r = await fetch('/locales/' + locale + '.json');
+                if (r.ok) this.translations = await r.json();
+            } catch (_) {}
+        },
+        t(key, ...args) {
+            let s = this.translations[key] ?? key;
+            args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
+            return s;
+        },
+        statusLabel(s) { return this.t(statusKeys[s] ?? 'Ticket.StatusToDo'); },
+        statusClass(s) {
+            const c = { 0: 'todo', 1: 'progress', 2: 'review', 3: 'done' };
+            return c[s] ?? 'todo';
+        },
+        async checkAdmin() {
+            try {
+                const r = await fetch('/api/UsersApi/is-admin');
+                if (r.ok) {
+                    this.isAdmin = await r.json();
+                    if (this.isAdmin) {
+                        this.loadProjectUsers();
+                    }
+                }
+            } catch (_) {}
+        },
+        async loadProjectUsers() {
+            try {
+                const r = await fetch('/api/ProjectsApi/' + projectId + '/users');
+                if (r.ok) {
+                    this.projectUsers = await r.json();
+                }
+            } catch (_) {}
+        },
+        async load() {
+            try {
+                this.loading = true;
+                this.error = null;
+                const [pRes, tRes] = await Promise.all([
+                    fetch('/api/ProjectsApi/' + projectId),
+                    fetch('/api/TicketsApi?projectId=' + projectId)
+                ]);
+                if (!pRes.ok) throw new Error(this.t('Project.ErrorLoad'));
+                if (!tRes.ok) throw new Error(this.t('Project.ErrorLoadTickets'));
+                this.project = await pRes.json();
+                this.tickets = await tRes.json();
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        async createTicket() {
+            if (!this.newTicket.title.trim()) return;
+            try {
+                const r = await fetch('/api/TicketsApi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: this.newTicket.title,
+                        description: this.newTicket.description || null,
+                        projectId,
+                        reporterId: 1,
+                        assigneeId: this.newTicket.assigneeId || null,
+                        type: parseInt(this.newTicket.type, 10),
+                        priority: parseInt(this.newTicket.priority, 10)
+                    })
+                });
+                if (!r.ok) throw new Error(this.t('Project.ErrorCreateTicket'));
+                this.showCreateTicket = false;
+                this.newTicket = { title: '', description: '', type: 0, priority: 2, assigneeId: null };
+                await this.load();
+            } catch (e) {
+                alert(e.message);
+            }
+        },
+        async addUserToProject() {
+            if (!this.selectedUserId) return;
+            try {
+                const r = await fetch('/api/ProjectsApi/' + projectId + '/users/' + this.selectedUserId, {
+                    method: 'POST'
+                });
+                if (r.ok) {
+                    this.selectedUserId = null;
+                    await this.loadProjectUsers();
+                }
+            } catch (e) {
+                alert('Error adding user to project');
+            }
+        },
+        async removeUserFromProject(userId) {
+            if (!confirm('Are you sure you want to remove this user from the project?')) return;
+            try {
+                const r = await fetch('/api/ProjectsApi/' + projectId + '/users/' + userId, {
+                    method: 'DELETE'
+                });
+                if (r.ok) {
+                    await this.loadProjectUsers();
+                }
+            } catch (e) {
+                alert('Error removing user from project');
+            }
+        }
+    }
+}).mount('#app');
+</script>
+}
