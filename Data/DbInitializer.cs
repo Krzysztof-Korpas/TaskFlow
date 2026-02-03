@@ -41,7 +41,7 @@ public static class DbInitializer
 
         if (await db.Projects.AnyAsync()) return;
 
-        Project project = new Project
+        Project project = new ()
         {
             Key = "DEMO",
             Name = "Projekt demonstracyjny",
@@ -50,7 +50,7 @@ public static class DbInitializer
         db.Projects.Add(project);
         await db.SaveChangesAsync();
 
-        Ticket ticket = new Ticket
+        Ticket ticket = new ()
         {
             Key = "DEMO-1",
             Title = "Pierwsze zadanie",

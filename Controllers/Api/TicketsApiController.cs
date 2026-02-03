@@ -8,18 +8,11 @@ namespace TaskFlow.Controllers.Api;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class TicketsApiController : ControllerBase
+public class TicketsApiController(ITicketService ticketService, IProjectService projectService, UserManager<ApplicationUser> userManager) : ControllerBase
 {
-    private readonly ITicketService _ticketService;
-    private readonly IProjectService _projectService;
-    private readonly UserManager<ApplicationUser> _userManager;
-
-    public TicketsApiController(ITicketService ticketService, IProjectService projectService, UserManager<ApplicationUser> userManager)
-    {
-        _ticketService = ticketService;
-        _projectService = projectService;
-        _userManager = userManager;
-    }
+    private readonly ITicketService _ticketService = ticketService;
+    private readonly IProjectService _projectService = projectService;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TicketDto>>> GetAll([FromQuery] int? projectId)

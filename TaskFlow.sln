@@ -4,8 +4,6 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow", "TaskFlow.csproj", "{457D5A95-A093-D3DD-914D-DFBF668566D5}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Tests", "TaskFlow.Tests\\TaskFlow.Tests.csproj", "{3EAF1DFA-6960-4278-9150-9DAEB8F7F305}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
