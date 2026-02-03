@@ -1,4 +1,6 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace TaskFlow.Services;
 
@@ -8,7 +10,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
     private readonly IRabbitMqService _mq = mq;
     public async Task<IEnumerable<Ticket>> GetAllAsync(int? projectId = null)
     {
-        var q = _db.Tickets
+        IQueryable<Ticket> q = _db.Tickets
             .Include(t => t.Project)
             .Include(t => t.Assignee)
             .Include(t => t.Reporter)
@@ -36,29 +38,50 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
 
     public async Task<Ticket> CreateAsync(Ticket ticket)
     {
-        var seq = await _db.Tickets
-            .Where(t => t.ProjectId == ticket.ProjectId)
-            .CountAsync() + 1;
-        var project = await _db.Projects.FindAsync(ticket.ProjectId);
-        ticket.Key = $"{project?.Key ?? "PRJ"}-{seq}";
-        ticket.CreatedAt = DateTime.UtcNow;
-        _db.Tickets.Add(ticket);
-        await _db.SaveChangesAsync();
-        _mq.Publish("stc.tickets", "ticket.created", System.Text.Json.JsonSerializer.Serialize(new
+        for (int attempt = 1; attempt <= 3; attempt++)
         {
-            ticket.Id,
-            ticket.Key,
-            ticket.Title,
-            ticket.ProjectId,
-            ticket.ReporterId,
-            ticket.AssigneeId
-        }));
-        return ticket;
+            bool useTransaction = _db.Database.IsRelational();
+            await using IDbContextTransaction? tx = useTransaction
+                ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable)
+                : null;
+            int seq = await _db.Tickets
+                .Where(t => t.ProjectId == ticket.ProjectId)
+                .CountAsync() + 1;
+            Project? project = await _db.Projects.FindAsync(ticket.ProjectId);
+            ticket.Key = $"{project?.Key ?? "PRJ"}-{seq}";
+            ticket.CreatedAt = DateTime.UtcNow;
+            _db.Tickets.Add(ticket);
+            try
+            {
+                await _db.SaveChangesAsync();
+                if (useTransaction && tx != null)
+                    await tx.CommitAsync();
+                _mq.Publish("stc.tickets", "ticket.created", System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    ticket.Id,
+                    ticket.Key,
+                    ticket.Title,
+                    ticket.ProjectId,
+                    ticket.ReporterId,
+                    ticket.AssigneeId
+                }));
+                return ticket;
+            }
+            catch (DbUpdateException) when (attempt < 3)
+            {
+                if (useTransaction && tx != null)
+                    await tx.RollbackAsync();
+                _db.Entry(ticket).State = EntityState.Detached;
+                ticket.Id = 0;
+            }
+        }
+
+        throw new InvalidOperationException("Failed to create ticket after retries.");
     }
 
     public async Task<Ticket?> UpdateAsync(int id, string? title, string? description, TicketType? type, TicketStatus? status, TicketPriority? priority, int? assigneeId)
     {
-        var ticket = await _db.Tickets.FindAsync(id);
+        Ticket? ticket = await _db.Tickets.FindAsync(id);
         if (ticket == null) return null;
         if (title != null) ticket.Title = title;
         if (description != null) ticket.Description = description;
@@ -80,7 +103,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var ticket = await _db.Tickets.FindAsync(id);
+        Ticket? ticket = await _db.Tickets.FindAsync(id);
         if (ticket == null) return false;
         _db.Tickets.Remove(ticket);
         await _db.SaveChangesAsync();
@@ -90,7 +113,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
 
     public async Task<Comment> AddCommentAsync(int ticketId, int authorId, string body)
     {
-        var comment = new Comment { TicketId = ticketId, AuthorId = authorId, Body = body };
+        Comment comment = new Comment { TicketId = ticketId, AuthorId = authorId, Body = body };
         _db.Comments.Add(comment);
         await _db.SaveChangesAsync();
         _mq.Publish("stc.tickets", "ticket.commented", System.Text.Json.JsonSerializer.Serialize(new

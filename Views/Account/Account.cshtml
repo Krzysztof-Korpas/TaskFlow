@@ -34,7 +34,7 @@
         {
             <div class="error">
                 <ul style="margin: 0; padding-left: 1.25rem;">
-                    @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                    @foreach (Microsoft.AspNetCore.Mvc.ModelBinding.ModelError error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
                     {
                         <li>@error.ErrorMessage</li>
                     }

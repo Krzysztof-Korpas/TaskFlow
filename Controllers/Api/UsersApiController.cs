@@ -16,14 +16,26 @@ public class UsersApiController(IUserService userService, UserManager<Applicatio
     [HttpGet]
     public async Task<ActionResult<IEnumerable<UserDto>>> GetAll()
     {
-        var list = await _userService.GetAllAsync();
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        if (!isAdmin) return Forbid();
+
+        IEnumerable<ApplicationUser> list = await _userService.GetAllAsync();
         return Ok(list.Select(u => u.ToDto()));
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<UserDto>> GetById(int id)
     {
-        var u = await _userService.GetByIdAsync(id);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        if (!isAdmin) return Forbid();
+
+        ApplicationUser? u = await _userService.GetByIdAsync(id);
         if (u == null) return NotFound();
         return Ok(u.ToDto());
     }
@@ -31,10 +43,10 @@ public class UsersApiController(IUserService userService, UserManager<Applicatio
     [HttpGet("is-admin")]
     public async Task<ActionResult<bool>> IsAdmin()
     {
-        var user = await _userManager.GetUserAsync(User);
+        ApplicationUser? user = await _userManager.GetUserAsync(User);
         if (user == null) return Unauthorized();
         
-        var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+        bool isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
         return Ok(isAdmin);
     }
 }

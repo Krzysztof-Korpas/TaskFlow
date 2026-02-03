@@ -20,7 +20,7 @@ internal static class Program
 
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
         {
-            var conn = builder.Configuration.GetConnectionString("DefaultConnection")
+            string conn = builder.Configuration.GetConnectionString("DefaultConnection")
                 ?? "Host=localhost;Database=stc;Username=postgres;Password=postgres";
             options.UseNpgsql(conn);
         });
@@ -29,9 +29,13 @@ internal static class Program
         {
             options.Password.RequireDigit = true;
             options.Password.RequireLowercase = true;
-            options.Password.RequireUppercase = false;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequiredLength = 6;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireNonAlphanumeric = true;
+            options.Password.RequiredLength = 8;
+            options.User.RequireUniqueEmail = true;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
         })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
@@ -49,17 +53,19 @@ internal static class Program
 
         builder.Services.AddLocalization();
         builder.Services.AddSingleton<IStringLocalizerFactory, JsonStringLocalizerFactory>();
-        builder.Services.AddControllersWithViews()
-            .AddRazorRuntimeCompilation()
+        IMvcBuilder mvcBuilder = builder.Services.AddControllersWithViews()
             .AddViewLocalization()
             .AddDataAnnotationsLocalization(options =>
             {
                 options.DataAnnotationLocalizerProvider = (type, factory) => factory.Create(type);
             });
 
+        if (builder.Environment.IsDevelopment())
+            mvcBuilder.AddRazorRuntimeCompilation();
+
         builder.Services.Configure<RequestLocalizationOptions>(options =>
         {
-            var supportedCultures = new[] { new CultureInfo("pl"), new CultureInfo("en") };
+            CultureInfo[] supportedCultures = [new CultureInfo("pl"), new CultureInfo("en")];
             options.DefaultRequestCulture = new RequestCulture("pl");
             options.SupportedCultures = supportedCultures;
             options.SupportedUICultures = supportedCultures;
@@ -67,26 +73,40 @@ internal static class Program
 
         builder.Services.AddEndpointsApiExplorer();
 
-        builder.Services.AddCors(options =>
+        string[] corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        if (corsOrigins.Length == 0 && builder.Environment.IsDevelopment())
         {
-            options.AddDefaultPolicy(policy =>
-            {
-                policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-            });
-        });
-
-        var app = builder.Build();
-
-        using (var scope = app.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
-            await db.Database.MigrateAsync();
-            await DbInitializer.SeedAsync(db, userManager, roleManager);
+            corsOrigins = ["http://localhost:5173", "http://localhost:3000"];
         }
 
-        var rabbit = app.Services.GetRequiredService<IRabbitMqService>();
+        if (corsOrigins.Length > 0)
+        {
+            builder.Services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy.WithOrigins(corsOrigins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
+                });
+            });
+        }
+
+        WebApplication app = builder.Build();
+
+        bool applyMigrations = builder.Configuration.GetValue<bool>("Database:ApplyMigrations");
+        bool seedEnabled = builder.Configuration.GetValue<bool>("Seed:Enabled");
+
+        using (IServiceScope scope = app.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            UserManager<ApplicationUser> userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            RoleManager<IdentityRole<int>> roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+            if (applyMigrations || app.Environment.IsDevelopment())
+                await db.Database.MigrateAsync();
+            if (seedEnabled)
+                await DbInitializer.SeedAsync(db, userManager, roleManager, builder.Configuration);
+        }
+
+        IRabbitMqService rabbit = app.Services.GetRequiredService<IRabbitMqService>();
         rabbit.EnsureExchangeAndQueue("stc.tickets", "stc.tickets.queue", "ticket.#");
 
         app.UseRequestLocalization();
@@ -94,11 +114,12 @@ internal static class Program
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.UseCors();
+        if (corsOrigins.Length > 0)
+            app.UseCors();
 
         app.MapGet("/locales/{culture}.json", (string culture, IWebHostEnvironment env) =>
         {
-            var path = Path.Combine(env.ContentRootPath, "Resources", $"{culture}.json");
+            string path = Path.Combine(env.ContentRootPath, "Resources", $"{culture}.json");
             if (!File.Exists(path)) return Results.NotFound();
             return Results.Content(File.ReadAllText(path), "application/json");
         });

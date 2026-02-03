@@ -22,16 +22,16 @@ public class ProjectsApiController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProjectDto>>> GetAll()
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
-        var list = await _projectService.GetAllForUserAsync(currentUser.Id, isAdmin);
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        IEnumerable<Project> list = await _projectService.GetAllForUserAsync(currentUser.Id, isAdmin);
         
-        var dtos = list.Select(p => p.ToDto(0)).ToList();
-        foreach (var d in dtos)
+        List<ProjectDto> dtos = list.Select(p => p.ToDto(0)).ToList();
+        foreach (ProjectDto d in dtos)
         {
-            var proj = await _projectService.GetByIdAsync(d.Id);
+            Project? proj = await _projectService.GetByIdAsync(d.Id);
             if (proj != null) d.TicketCount = proj.Tickets?.Count ?? 0;
         }
         return Ok(dtos);
@@ -40,15 +40,15 @@ public class ProjectsApiController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ProjectDto>> GetById(int id)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
-        var hasAccess = await _projectService.UserHasAccessToProjectAsync(id, currentUser.Id, isAdmin);
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(id, currentUser.Id, isAdmin);
         
         if (!hasAccess) return Forbid();
 
-        var p = await _projectService.GetByIdAsync(id);
+        Project? p = await _projectService.GetByIdAsync(id);
         if (p == null) return NotFound();
         return Ok(p.ToDto(p.Tickets?.Count ?? 0));
     }
@@ -56,10 +56,16 @@ public class ProjectsApiController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> Create([FromBody] CreateProjectRequest req)
     {
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        if (!isAdmin) return Forbid();
+
         try
         {
             Project project = new() { Key = req.Key, Name = req.Name, Description = req.Description };
-            var created = await _projectService.CreateAsync(project);
+            Project created = await _projectService.CreateAsync(project);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToDto(0));
         }
         catch (InvalidOperationException ex)
@@ -71,15 +77,27 @@ public class ProjectsApiController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<ProjectDto>> Update(int id, [FromBody] UpdateProjectRequest req)
     {
-        var p = await _projectService.UpdateAsync(id, req.Name, req.Description);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        if (!isAdmin) return Forbid();
+
+        Project? p = await _projectService.UpdateAsync(id, req.Name, req.Description);
         if (p == null) return NotFound();
-        var proj = await _projectService.GetByIdAsync(id);
+        Project? proj = await _projectService.GetByIdAsync(id);
         return Ok(p.ToDto(proj?.Tickets?.Count ?? 0));
     }
 
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> Delete(int id)
     {
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        if (!isAdmin) return Forbid();
+
         if (!await _projectService.DeleteAsync(id)) return NotFound();
         return NoContent();
     }
@@ -87,26 +105,26 @@ public class ProjectsApiController : ControllerBase
     [HttpGet("{id:int}/users")]
     public async Task<ActionResult<IEnumerable<UserDto>>> GetProjectUsers(int id)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
         if (!isAdmin) return Forbid();
 
-        var users = await _projectService.GetProjectUsersAsync(id);
+        IEnumerable<ApplicationUser> users = await _projectService.GetProjectUsersAsync(id);
         return Ok(users.Select(u => u.ToDto()));
     }
 
     [HttpPost("{id:int}/users/{userId:int}")]
     public async Task<ActionResult> AddUserToProject(int id, int userId)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
         if (!isAdmin) return Forbid();
 
-        var result = await _projectService.AddUserToProjectAsync(id, userId);
+        bool result = await _projectService.AddUserToProjectAsync(id, userId);
         if (!result) return BadRequest("User already assigned to project");
         
         return Ok();
@@ -115,13 +133,13 @@ public class ProjectsApiController : ControllerBase
     [HttpDelete("{id:int}/users/{userId:int}")]
     public async Task<ActionResult> RemoveUserFromProject(int id, int userId)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
         if (!isAdmin) return Forbid();
 
-        var result = await _projectService.RemoveUserFromProjectAsync(id, userId);
+        bool result = await _projectService.RemoveUserFromProjectAsync(id, userId);
         if (!result) return NotFound();
         
         return NoContent();

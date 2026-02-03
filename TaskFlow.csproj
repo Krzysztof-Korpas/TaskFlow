@@ -24,6 +24,11 @@
     <Folder Include="Migrations/" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="TaskFlow.Tests/**" />
+    <None Remove="TaskFlow.Tests/**" />
+    <EmbeddedResource Remove="TaskFlow.Tests/**" />
+  </ItemGroup>
+  <ItemGroup>
     <Using Include="TaskFlow.Models" />
     <Using Include="TaskFlow.Data" />
     <Using Include="TaskFlow.Services" />

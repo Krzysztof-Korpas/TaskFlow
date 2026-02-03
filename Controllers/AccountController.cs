@@ -27,14 +27,14 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
         if (!ModelState.IsValid)
             return View(model);
 
-        var user = await userManager.FindByEmailAsync(model.Email!);
+        ApplicationUser? user = await userManager.FindByEmailAsync(model.Email!);
         if (user == null)
         {
             ModelState.AddModelError(string.Empty, "Nieprawidłowy adres e-mail lub hasło.");
             return View(model);
         }
 
-        var result = await signInManager.PasswordSignInAsync(user.UserName!, model.Password!, model.RememberMe, lockoutOnFailure: false);
+        Microsoft.AspNetCore.Identity.SignInResult result = await signInManager.PasswordSignInAsync(user.UserName!, model.Password!, model.RememberMe, lockoutOnFailure: false);
         if (result.Succeeded)
         {
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
@@ -65,16 +65,16 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
         if (!ModelState.IsValid)
             return View(model);
 
-        var user = new ApplicationUser
+        ApplicationUser user = new ApplicationUser
         {
             UserName = model.Email,
             Email = model.Email,
             DisplayName = model.DisplayName ?? model.Email ?? "User"
         };
-        var result = await userManager.CreateAsync(user, model.Password ?? string.Empty);
+        IdentityResult result = await userManager.CreateAsync(user, model.Password ?? string.Empty);
         if (!result.Succeeded)
         {
-            foreach (var e in result.Errors)
+            foreach (IdentityError e in result.Errors)
                 ModelState.AddModelError(string.Empty, e.Description);
             return View(model);
         }
@@ -101,11 +101,11 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
     [Authorize]
     public async Task<IActionResult> Account()
     {
-        var user = await userManager.GetUserAsync(User);
+        ApplicationUser? user = await userManager.GetUserAsync(User);
         if (user == null)
             return RedirectToAction(nameof(Login));
 
-        var model = new UserPanelModel
+        UserPanelModel model = new UserPanelModel
         {
             Email = user.Email ?? string.Empty,
             DisplayName = user.DisplayName
@@ -121,8 +121,8 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
     {
         if (!ModelState.IsValid)
         {
-            var user = await userManager.GetUserAsync(User);
-            var panelModel = new UserPanelModel
+            ApplicationUser? user = await userManager.GetUserAsync(User);
+            UserPanelModel panelModel = new UserPanelModel
             {
                 Email = user?.Email ?? string.Empty,
                 DisplayName = user?.DisplayName ?? string.Empty,
@@ -131,11 +131,11 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
             return View("Account", panelModel);
         }
 
-        var currentUser = await userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await userManager.GetUserAsync(User);
         if (currentUser == null)
             return RedirectToAction(nameof(Login));
 
-        var result = await userManager.ChangePasswordAsync(currentUser, model.CurrentPassword!, model.NewPassword!);
+        IdentityResult result = await userManager.ChangePasswordAsync(currentUser, model.CurrentPassword!, model.NewPassword!);
         if (result.Succeeded)
         {
             await signInManager.RefreshSignInAsync(currentUser);
@@ -143,12 +143,12 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
             return RedirectToAction(nameof(Account));
         }
 
-        foreach (var error in result.Errors)
+        foreach (IdentityError error in result.Errors)
         {
             ModelState.AddModelError(string.Empty, error.Description);
         }
 
-        var panelModelError = new UserPanelModel
+        UserPanelModel panelModelError = new UserPanelModel
         {
             Email = currentUser.Email ?? string.Empty,
             DisplayName = currentUser.DisplayName,

@@ -1,7 +1,7 @@
 @model TaskFlow.Models.ViewModel.LoginViewModel
 @{
     ViewData["Title"] = Localizer["Auth.Login"].Value;
-    var returnUrl = ViewData["ReturnUrl"] as string ?? "/";
+    string returnUrl = ViewData["ReturnUrl"] as string ?? "/";
 }
 
 <div class="auth-page">

@@ -35,7 +35,7 @@ public class ProjectService(ApplicationDbContext db) : IProjectService
 
     public async Task<Project?> UpdateAsync(int id, string? name, string? description)
     {
-        var p = await _db.Projects.FindAsync(id);
+        Project? p = await _db.Projects.FindAsync(id);
         if (p == null) return null;
         if (name != null) p.Name = name;
         if (description != null) p.Description = description;
@@ -45,7 +45,7 @@ public class ProjectService(ApplicationDbContext db) : IProjectService
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var p = await _db.Projects.FindAsync(id);
+        Project? p = await _db.Projects.FindAsync(id);
         if (p == null) return false;
         _db.Projects.Remove(p);
         await _db.SaveChangesAsync();
@@ -54,12 +54,12 @@ public class ProjectService(ApplicationDbContext db) : IProjectService
 
     public async Task<bool> AddUserToProjectAsync(int projectId, int userId)
     {
-        var exists = await _db.ProjectUserGroups
+        bool exists = await _db.ProjectUserGroups
             .AnyAsync(pug => pug.ProjectId == projectId && pug.UserId == userId);
         
         if (exists) return false;
 
-        var projectUserGroup = new ProjectUserGroup
+        ProjectUserGroup projectUserGroup = new ProjectUserGroup
         {
             ProjectId = projectId,
             UserId = userId
@@ -72,7 +72,7 @@ public class ProjectService(ApplicationDbContext db) : IProjectService
 
     public async Task<bool> RemoveUserFromProjectAsync(int projectId, int userId)
     {
-        var assignment = await _db.ProjectUserGroups
+        ProjectUserGroup? assignment = await _db.ProjectUserGroups
             .FirstOrDefaultAsync(pug => pug.ProjectId == projectId && pug.UserId == userId);
         
         if (assignment == null) return false;

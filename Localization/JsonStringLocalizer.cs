@@ -21,7 +21,7 @@ public class JsonStringLocalizer : IStringLocalizer
     {
         get
         {
-            var value = GetString(name);
+            string? value = GetString(name);
             return new LocalizedString(name, value ?? name, value == null);
         }
     }
@@ -30,51 +30,51 @@ public class JsonStringLocalizer : IStringLocalizer
     {
         get
         {
-            var format = GetString(name);
-            var value = format == null ? name : string.Format(CultureInfo.CurrentCulture, format, arguments);
+            string? format = GetString(name);
+            string value = format == null ? name : string.Format(CultureInfo.CurrentCulture, format, arguments);
             return new LocalizedString(name, value, format == null);
         }
     }
 
     public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures)
     {
-        var dict = LoadDictionary(_cultureName);
+        Dictionary<string, string>? dict = LoadDictionary(_cultureName);
         if (dict == null) return Array.Empty<LocalizedString>();
         return dict.Select(kv => new LocalizedString(kv.Key, kv.Value, false));
     }
 
     private string? GetString(string name)
     {
-        var dict = LoadDictionary(_cultureName);
-        if (dict != null && dict.TryGetValue(name, out var value))
+        Dictionary<string, string>? dict = LoadDictionary(_cultureName);
+        if (dict != null && dict.TryGetValue(name, out string? value))
             return value;
-        var baseName = _cultureName.Length > 2 ? _cultureName[..2] : _cultureName;
+        string baseName = _cultureName.Length > 2 ? _cultureName[..2] : _cultureName;
         if (baseName != _cultureName)
         {
             dict = LoadDictionary(baseName);
-            if (dict != null && dict.TryGetValue(name, out var fallback))
+            if (dict != null && dict.TryGetValue(name, out string? fallback))
                 return fallback;
         }
         dict = LoadDictionary("pl");
-        if (dict != null && dict.TryGetValue(name, out var pl))
+        if (dict != null && dict.TryGetValue(name, out string? pl))
             return pl;
         return null;
     }
 
     private Dictionary<string, string>? LoadDictionary(string culture)
     {
-        var key = culture;
-        if (_cache.TryGetValue(key, out var cached))
+        string key = culture;
+        if (_cache.TryGetValue(key, out Dictionary<string, string>? cached))
             return cached;
 
-        var path = Path.Combine(_resourcesPath, $"{culture}.json");
+        string path = Path.Combine(_resourcesPath, $"{culture}.json");
         if (!File.Exists(path))
             return _cache.GetOrAdd(key, _ => new Dictionary<string, string>());
 
         try
         {
-            var json = File.ReadAllText(path);
-            var flat = Flatten(JsonSerializer.Deserialize<JsonElement>(json));
+            string json = File.ReadAllText(path);
+            Dictionary<string, string> flat = Flatten(JsonSerializer.Deserialize<JsonElement>(json));
             _cache.TryAdd(key, flat);
             return flat;
         }
@@ -86,7 +86,7 @@ public class JsonStringLocalizer : IStringLocalizer
 
     private static Dictionary<string, string> Flatten(JsonElement element, string prefix = "")
     {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         FlattenRecursive(element, prefix, result);
         return result;
     }
@@ -96,9 +96,9 @@ public class JsonStringLocalizer : IStringLocalizer
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                foreach (var prop in element.EnumerateObject())
+                foreach (JsonProperty prop in element.EnumerateObject())
                 {
-                    var key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
+                    string key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
                     FlattenRecursive(prop.Value, key, result);
                 }
                 break;

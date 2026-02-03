@@ -5,28 +5,30 @@ namespace TaskFlow.Data;
 
 public static class DbInitializer
 {
-    private const string AdminEmail = "admin@stc.local";
-    private const string AdminPassword = "Admin1!";
-
-    public static async Task SeedAsync(ApplicationDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole<int>> roleManager)
+    public static async Task SeedAsync(ApplicationDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole<int>> roleManager, IConfiguration config)
     {
+        string? adminEmail = config["Seed:AdminEmail"];
+        string? adminPassword = config["Seed:AdminPassword"];
+        if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+            throw new InvalidOperationException("Seed admin credentials are missing. Provide Seed:AdminEmail and Seed:AdminPassword.");
+
         // Create Admin role if it doesn't exist
         if (!await roleManager.RoleExistsAsync("Admin"))
         {
             await roleManager.CreateAsync(new IdentityRole<int>("Admin"));
         }
 
-        var admin = await userManager.FindByEmailAsync(AdminEmail);
+        ApplicationUser? admin = await userManager.FindByEmailAsync(adminEmail);
         if (admin == null)
         {
             admin = new ApplicationUser
             {
-                UserName = AdminEmail,
-                Email = AdminEmail,
+                UserName = adminEmail,
+                Email = adminEmail,
                 DisplayName = "Administrator",
                 EmailConfirmed = true
             };
-            var result = await userManager.CreateAsync(admin, AdminPassword);
+            IdentityResult result = await userManager.CreateAsync(admin, adminPassword);
             if (!result.Succeeded)
                 throw new InvalidOperationException(string.Join("; ", result.Errors.Select(e => e.Description)));
         }
@@ -39,7 +41,7 @@ public static class DbInitializer
 
         if (await db.Projects.AnyAsync()) return;
 
-        var project = new Project
+        Project project = new Project
         {
             Key = "DEMO",
             Name = "Projekt demonstracyjny",
@@ -48,7 +50,7 @@ public static class DbInitializer
         db.Projects.Add(project);
         await db.SaveChangesAsync();
 
-        var ticket = new Ticket
+        Ticket ticket = new Ticket
         {
             Key = "DEMO-1",
             Title = "Pierwsze zadanie",

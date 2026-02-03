@@ -24,25 +24,25 @@ public class TicketsApiController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TicketDto>>> GetAll([FromQuery] int? projectId)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
 
         // If projectId is specified, check access
         if (projectId.HasValue)
         {
-            var hasAccess = await _projectService.UserHasAccessToProjectAsync(projectId.Value, currentUser.Id, isAdmin);
+            bool hasAccess = await _projectService.UserHasAccessToProjectAsync(projectId.Value, currentUser.Id, isAdmin);
             if (!hasAccess) return Forbid();
         }
 
-        var list = await _ticketService.GetAllAsync(projectId);
+        IEnumerable<Ticket> list = await _ticketService.GetAllAsync(projectId);
         
         // Filter tickets based on project access
         if (!isAdmin)
         {
-            var accessibleProjects = await _projectService.GetAllForUserAsync(currentUser.Id, false);
-            var accessibleProjectIds = accessibleProjects.Select(p => p.Id).ToHashSet();
+            IEnumerable<Project> accessibleProjects = await _projectService.GetAllForUserAsync(currentUser.Id, false);
+            HashSet<int> accessibleProjectIds = accessibleProjects.Select(p => p.Id).ToHashSet();
             list = list.Where(t => accessibleProjectIds.Contains(t.ProjectId));
         }
 
@@ -52,14 +52,14 @@ public class TicketsApiController : ControllerBase
     [HttpGet("{key}")]
     public async Task<ActionResult<TicketDto>> GetByKey(string key)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var t = await _ticketService.GetByKeyAsync(key);
+        Ticket? t = await _ticketService.GetByKeyAsync(key);
         if (t == null) return NotFound();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
-        var hasAccess = await _projectService.UserHasAccessToProjectAsync(t.ProjectId, currentUser.Id, isAdmin);
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(t.ProjectId, currentUser.Id, isAdmin);
         
         if (!hasAccess) return Forbid();
 
@@ -69,59 +69,77 @@ public class TicketsApiController : ControllerBase
     [HttpGet("id/{id:int}")]
     public async Task<ActionResult<TicketDto>> GetById(int id)
     {
-        var t = await _ticketService.GetByIdAsync(id);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        Ticket? t = await _ticketService.GetByIdAsync(id);
         if (t == null) return NotFound();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(t.ProjectId, currentUser.Id, isAdmin);
+        if (!hasAccess) return Forbid();
+
         return Ok(t.ToDto());
     }
 
     [HttpPost]
     public async Task<ActionResult<TicketDto>> Create([FromBody] CreateTicketRequest req)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
-        var hasAccess = await _projectService.UserHasAccessToProjectAsync(req.ProjectId, currentUser.Id, isAdmin);
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(req.ProjectId, currentUser.Id, isAdmin);
         
         if (!hasAccess) return Forbid();
 
-        var ticket = new Ticket
+        Ticket ticket = new Ticket
         {
             Title = req.Title,
             Description = req.Description,
             ProjectId = req.ProjectId,
-            ReporterId = req.ReporterId,
+            ReporterId = currentUser.Id,
             AssigneeId = req.AssigneeId,
             Type = req.Type,
             Priority = req.Priority
         };
-        var created = await _ticketService.CreateAsync(ticket);
+        Ticket created = await _ticketService.CreateAsync(ticket);
         return CreatedAtAction(nameof(GetByKey), new { key = created.Key }, created.ToDto());
     }
 
     [HttpPut("{id:int}")]
     public async Task<ActionResult<TicketDto>> Update(int id, [FromBody] UpdateTicketRequest req)
     {
-        var currentUser = await _userManager.GetUserAsync(User);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
         if (currentUser == null) return Unauthorized();
 
-        var ticket = await _ticketService.GetByIdAsync(id);
+        Ticket? ticket = await _ticketService.GetByIdAsync(id);
         if (ticket == null) return NotFound();
 
-        var isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
-        var hasAccess = await _projectService.UserHasAccessToProjectAsync(ticket.ProjectId, currentUser.Id, isAdmin);
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(ticket.ProjectId, currentUser.Id, isAdmin);
         
         if (!hasAccess) return Forbid();
 
-        var t = await _ticketService.UpdateAsync(id, req.Title, req.Description, req.Type, req.Status, req.Priority, req.AssigneeId);
+        Ticket? t = await _ticketService.UpdateAsync(id, req.Title, req.Description, req.Type, req.Status, req.Priority, req.AssigneeId);
         if (t == null) return NotFound();
-        var full = await _ticketService.GetByIdAsync(id);
+        Ticket? full = await _ticketService.GetByIdAsync(id);
         return Ok((full ?? t).ToDto());
     }
 
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> Delete(int id)
     {
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        Ticket? ticket = await _ticketService.GetByIdAsync(id);
+        if (ticket == null) return NotFound();
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(ticket.ProjectId, currentUser.Id, isAdmin);
+        if (!hasAccess) return Forbid();
+
         if (!await _ticketService.DeleteAsync(id)) return NotFound();
         return NoContent();
     }
@@ -129,9 +147,17 @@ public class TicketsApiController : ControllerBase
     [HttpPost("{id:int}/comments")]
     public async Task<ActionResult<CommentDto>> AddComment(int id, [FromBody] AddCommentRequest req)
     {
-        var ticket = await _ticketService.GetByIdAsync(id);
+        ApplicationUser? currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser == null) return Unauthorized();
+
+        Ticket? ticket = await _ticketService.GetByIdAsync(id);
         if (ticket == null) return NotFound();
-        var comment = await _ticketService.AddCommentAsync(id, 1, req.Body);
+
+        bool isAdmin = await _userManager.IsInRoleAsync(currentUser, "Admin");
+        bool hasAccess = await _projectService.UserHasAccessToProjectAsync(ticket.ProjectId, currentUser.Id, isAdmin);
+        if (!hasAccess) return Forbid();
+
+        Comment comment = await _ticketService.AddCommentAsync(id, currentUser.Id, req.Body);
         return Ok(comment.ToDto());
     }
 }

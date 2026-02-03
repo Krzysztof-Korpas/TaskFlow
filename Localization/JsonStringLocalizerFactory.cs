@@ -14,13 +14,13 @@ public class JsonStringLocalizerFactory : IStringLocalizerFactory
 
     public IStringLocalizer Create(Type resourceSource)
     {
-        var culture = CultureInfo.CurrentUICulture.Name;
+        string culture = CultureInfo.CurrentUICulture.Name;
         return new JsonStringLocalizer(_resourcesPath, culture);
     }
 
     public IStringLocalizer Create(string baseName, string location)
     {
-        var culture = CultureInfo.CurrentUICulture.Name;
+        string culture = CultureInfo.CurrentUICulture.Name;
         return new JsonStringLocalizer(_resourcesPath, culture);
     }
 }
