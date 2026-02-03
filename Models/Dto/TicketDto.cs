@@ -7,7 +7,8 @@ public class TicketDto
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public TicketType Type { get; set; }
-    public TicketStatus Status { get; set; }
+    public int StatusId { get; set; }
+    public string? StatusName { get; set; }
     public TicketPriority Priority { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -38,6 +39,7 @@ public class CreateTicketRequest
     public int? AssigneeId { get; set; }
     public TicketType Type { get; set; } = TicketType.Task;
     public TicketPriority Priority { get; set; } = TicketPriority.Medium;
+    public int? StatusId { get; set; }
 }
 
 public class UpdateTicketRequest
@@ -45,7 +47,7 @@ public class UpdateTicketRequest
     public string? Title { get; set; }
     public string? Description { get; set; }
     public TicketType? Type { get; set; }
-    public TicketStatus? Status { get; set; }
+    public int? StatusId { get; set; }
     public TicketPriority? Priority { get; set; }
     public int? AssigneeId { get; set; }
 }

@@ -15,5 +15,7 @@ public class Project
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Ticket> Tickets { get; set; } = [];
+    public ICollection<ProjectStatus> Statuses { get; set; } = [];
+    public ICollection<KanbanColumnPreference> KanbanColumnPreferences { get; set; } = [];
     public ICollection<ProjectUserGroup> AssignedUsers { get; set; } = [];
 }

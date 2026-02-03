@@ -12,6 +12,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
     {
         IQueryable<Ticket> q = _db.Tickets
             .Include(t => t.Project)
+            .Include(t => t.Status)
             .Include(t => t.Assignee)
             .Include(t => t.Reporter)
             .AsQueryable();
@@ -23,6 +24,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
     public async Task<Ticket?> GetByKeyAsync(string key) =>
         await _db.Tickets
             .Include(t => t.Project)
+            .Include(t => t.Status)
             .Include(t => t.Assignee)
             .Include(t => t.Reporter)
             .Include(t => t.Comments).ThenInclude(c => c.Author)
@@ -31,6 +33,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
     public async Task<Ticket?> GetByIdAsync(int id) =>
         await _db.Tickets
             .Include(t => t.Project)
+            .Include(t => t.Status)
             .Include(t => t.Assignee)
             .Include(t => t.Reporter)
             .Include(t => t.Comments).ThenInclude(c => c.Author)
@@ -79,14 +82,14 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
         throw new InvalidOperationException("Failed to create ticket after retries.");
     }
 
-    public async Task<Ticket?> UpdateAsync(int id, string? title, string? description, TicketType? type, TicketStatus? status, TicketPriority? priority, int? assigneeId)
+    public async Task<Ticket?> UpdateAsync(int id, string? title, string? description, TicketType? type, int? statusId, TicketPriority? priority, int? assigneeId)
     {
         Ticket? ticket = await _db.Tickets.FindAsync(id);
         if (ticket == null) return null;
         if (title != null) ticket.Title = title;
         if (description != null) ticket.Description = description;
         if (type.HasValue) ticket.Type = type.Value;
-        if (status.HasValue) ticket.Status = status.Value;
+        if (statusId.HasValue) ticket.StatusId = statusId.Value;
         if (priority.HasValue) ticket.Priority = priority.Value;
         if (assigneeId.HasValue) ticket.AssigneeId = assigneeId.Value == 0 ? null : assigneeId;
         ticket.UpdatedAt = DateTime.UtcNow;
@@ -95,7 +98,7 @@ public class TicketService(ApplicationDbContext db, IRabbitMqService mq) : ITick
         {
             ticket.Id,
             ticket.Key,
-            ticket.Status,
+            ticket.StatusId,
             ticket.AssigneeId
         }));
         return ticket;

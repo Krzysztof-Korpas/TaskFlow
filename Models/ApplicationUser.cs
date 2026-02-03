@@ -14,4 +14,5 @@ public class ApplicationUser : IdentityUser<int>
     public ICollection<Ticket> CreatedTickets { get; set; } = [];
     public ICollection<Comment> Comments { get; set; } = [];
     public ICollection<ProjectUserGroup> ProjectAssignments { get; set; } = [];
+    public ICollection<KanbanColumnPreference> KanbanColumnPreferences { get; set; } = [];
 }

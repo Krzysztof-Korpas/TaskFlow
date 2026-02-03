@@ -50,6 +50,7 @@ internal static class Program
         builder.Services.AddScoped<ITicketService, TicketService>();
         builder.Services.AddScoped<IProjectService, ProjectService>();
         builder.Services.AddScoped<IUserService, UserService>();
+        builder.Services.AddScoped<IKanbanService, KanbanService>();
 
         builder.Services.AddLocalization();
         builder.Services.AddSingleton<IStringLocalizerFactory, JsonStringLocalizerFactory>();

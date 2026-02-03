@@ -15,7 +15,7 @@
             <div>
                 <div class="card">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-                        <span :class="'badge badge-' + statusClass(ticket.status)">{{ statusLabel(ticket.status) }}</span>
+                        <span :class="'badge badge-' + statusClass(ticket.statusId)">{{ ticket.statusName || statusNameById(ticket.statusId) }}</span>
                         <span :class="'priority-' + priorityClass(ticket.priority)">{{ t('Ticket.Priority') }}: {{ priorityLabel(ticket.priority) }}</span>
                     </div>
                     <div v-if="ticket.description" style="white-space: pre-wrap; margin-bottom: 1rem;">{{ ticket.description }}</div>
@@ -41,11 +41,8 @@
                     <h4 style="margin-top: 0;">{{ t('Ticket.Details') }}</h4>
                     <div class="form-group">
                         <label>{{ t('Ticket.Status') }}</label>
-                        <select :value="ticket.status" @@change="updateStatus($event.target.value)">
-                            <option value="0">{{ t('Ticket.StatusToDo') }}</option>
-                            <option value="1">{{ t('Ticket.StatusInProgress') }}</option>
-                            <option value="2">{{ t('Ticket.StatusInReview') }}</option>
-                            <option value="3">{{ t('Ticket.StatusDone') }}</option>
+                        <select :value="ticket.statusId" @@change="updateStatus($event.target.value)">
+                            <option v-for="s in sortedStatuses" :key="s.id" :value="s.id">{{ s.name }}</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -75,18 +72,23 @@
 <script>
 const ticketKey = '@Html.Raw(Model)';
 const { createApp } = Vue;
-const statusKeys = { 0: 'Ticket.StatusToDo', 1: 'Ticket.StatusInProgress', 2: 'Ticket.StatusInReview', 3: 'Ticket.StatusDone' };
 const priorityKeys = { 0: 'Ticket.PriorityLowest', 1: 'Ticket.PriorityLow', 2: 'Ticket.PriorityMedium', 3: 'Ticket.PriorityHigh', 4: 'Ticket.PriorityHighest' };
 createApp({
     data() {
         return {
             ticket: null,
             users: [],
+            statuses: [],
             loading: true,
             error: null,
             newComment: '',
             translations: {}
         };
+    },
+    computed: {
+        sortedStatuses() {
+            return this.statuses.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+        }
     },
     mounted() {
         this.loadTranslations().then(() => this.load());
@@ -105,10 +107,15 @@ createApp({
             args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
             return s;
         },
-        statusLabel(s) { return this.t(statusKeys[s] ?? 'Ticket.StatusToDo'); },
-        statusClass(s) {
+        statusNameById(statusId) {
+            const found = this.statuses.find(s => s.id === statusId);
+            return found ? found.name : this.t('Ticket.Status');
+        },
+        statusClass(statusId) {
+            const sorted = this.sortedStatuses;
+            const index = sorted.findIndex(s => s.id === statusId);
             const c = { 0: 'todo', 1: 'progress', 2: 'review', 3: 'done' };
-            return c[s] ?? 'todo';
+            return c[index] ?? 'neutral';
         },
         priorityLabel(p) { return this.t(priorityKeys[p] ?? 'Ticket.PriorityMedium'); },
         priorityClass(p) {
@@ -127,14 +134,16 @@ createApp({
                 const r = await fetch('/api/TicketsApi/' + encodeURIComponent(ticketKey));
                 if (!r.ok) throw new Error(this.t('Ticket.NotFound'));
                 this.ticket = await r.json();
+                const sRes = await fetch('/api/KanbanApi/project/' + this.ticket.projectId + '/statuses');
+                if (sRes.ok) this.statuses = await sRes.json();
             } catch (e) {
                 this.error = e.message;
             } finally {
                 this.loading = false;
             }
         },
-        async updateStatus(status) {
-            await this.apiUpdate({ status: parseInt(status, 10) });
+        async updateStatus(statusId) {
+            await this.apiUpdate({ statusId: parseInt(statusId, 10) });
         },
         async updateAssignee(assigneeId) {
             await this.apiUpdate({ assigneeId: assigneeId === '' ? null : parseInt(assigneeId, 10) });

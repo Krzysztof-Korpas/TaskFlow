@@ -43,7 +43,7 @@
         <div class="grid">
             <a v-for="ticket in tickets" :key="ticket.id" :href="'/tickets/' + ticket.key" class="card">
                 <span class="ticket-key">{{ ticket.key }}</span>
-                <span :class="'badge badge-' + statusClass(ticket.status)" style="margin-left: 0.5rem;">{{ statusLabel(ticket.status) }}</span>
+                <span :class="'badge badge-' + statusClass(ticket.statusId)" style="margin-left: 0.5rem;">{{ ticket.statusName || statusNameById(ticket.statusId) }}</span>
                 <div style="margin-top: 0.5rem;">{{ ticket.title }}</div>
                 <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">
                     {{ ticket.assigneeName || t('Ticket.Unassigned') }} · {{ ticket.priority }}
@@ -101,13 +101,13 @@
 <script>
 const projectId = @Model;
 const { createApp } = Vue;
-const statusKeys = { 0: 'Ticket.StatusToDo', 1: 'Ticket.StatusInProgress', 2: 'Ticket.StatusInReview', 3: 'Ticket.StatusDone' };
 createApp({
     data() {
         return {
             projectId,
             project: null,
             tickets: [],
+            statuses: [],
             users: [],
             projectUsers: [],
             isAdmin: false,
@@ -143,10 +143,15 @@ createApp({
             args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
             return s;
         },
-        statusLabel(s) { return this.t(statusKeys[s] ?? 'Ticket.StatusToDo'); },
-        statusClass(s) {
+        statusNameById(statusId) {
+            const found = this.statuses.find(s => s.id === statusId);
+            return found ? found.name : this.t('Ticket.Status');
+        },
+        statusClass(statusId) {
+            const sorted = this.statuses.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+            const index = sorted.findIndex(s => s.id === statusId);
             const c = { 0: 'todo', 1: 'progress', 2: 'review', 3: 'done' };
-            return c[s] ?? 'todo';
+            return c[index] ?? 'neutral';
         },
         async checkAdmin() {
             try {
@@ -171,14 +176,17 @@ createApp({
             try {
                 this.loading = true;
                 this.error = null;
-                const [pRes, tRes] = await Promise.all([
+                const [pRes, tRes, sRes] = await Promise.all([
                     fetch('/api/ProjectsApi/' + projectId),
-                    fetch('/api/TicketsApi?projectId=' + projectId)
+                    fetch('/api/TicketsApi?projectId=' + projectId),
+                    fetch('/api/KanbanApi/project/' + projectId + '/statuses')
                 ]);
                 if (!pRes.ok) throw new Error(this.t('Project.ErrorLoad'));
                 if (!tRes.ok) throw new Error(this.t('Project.ErrorLoadTickets'));
+                if (!sRes.ok) throw new Error(this.t('Project.ErrorLoad'));
                 this.project = await pRes.json();
                 this.tickets = await tRes.json();
+                this.statuses = await sRes.json();
             } catch (e) {
                 this.error = e.message;
             } finally {

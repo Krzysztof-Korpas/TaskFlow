@@ -7,7 +7,8 @@ public class Ticket
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public TicketType Type { get; set; } = TicketType.Task;
-    public TicketStatus Status { get; set; } = TicketStatus.ToDo;
+    public int StatusId { get; set; }
+    public ProjectStatus Status { get; set; } = null!;
     public TicketPriority Priority { get; set; } = TicketPriority.Medium;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

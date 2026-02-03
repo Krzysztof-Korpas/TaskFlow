@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TaskFlow.Data;
@@ -11,9 +12,11 @@ using TaskFlow.Data;
 namespace TaskFlow.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260203120000_AddProjectStatusesAndKanbanPreferences")]
+    partial class AddProjectStatusesAndKanbanPreferences
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -102,10 +105,12 @@ namespace TaskFlow.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<int>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("ProviderDisplayName")
                         .HasColumnType("text");
@@ -141,10 +146,12 @@ namespace TaskFlow.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Value")
                         .HasColumnType("text");
@@ -243,8 +250,7 @@ namespace TaskFlow.Migrations
 
                     b.Property<string>("Body")
                         .IsRequired()
-                        .HasMaxLength(800)
-                        .HasColumnType("character varying(800)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -259,41 +265,6 @@ namespace TaskFlow.Migrations
                     b.HasIndex("TicketId");
 
                     b.ToTable("Comments");
-                });
-
-            modelBuilder.Entity("TaskFlow.Models.KanbanColumnPreference", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("IsVisible")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StatusId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StatusId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("ProjectId", "UserId", "StatusId")
-                        .IsUnique();
-
-                    b.ToTable("KanbanColumnPreferences");
                 });
 
             modelBuilder.Entity("TaskFlow.Models.Project", b =>
@@ -353,10 +324,47 @@ namespace TaskFlow.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProjectId");
+
                     b.HasIndex("ProjectId", "Name")
                         .IsUnique();
 
                     b.ToTable("ProjectStatuses");
+                });
+
+            modelBuilder.Entity("TaskFlow.Models.KanbanColumnPreference", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StatusId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StatusId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "UserId", "StatusId")
+                        .IsUnique();
+
+                    b.ToTable("KanbanColumnPreferences");
                 });
 
             modelBuilder.Entity("TaskFlow.Models.ProjectUserGroup", b =>
@@ -515,6 +523,17 @@ namespace TaskFlow.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("TaskFlow.Models.ProjectStatus", b =>
+                {
+                    b.HasOne("TaskFlow.Models.Project", "Project")
+                        .WithMany("Statuses")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("TaskFlow.Models.KanbanColumnPreference", b =>
                 {
                     b.HasOne("TaskFlow.Models.Project", "Project")
@@ -540,17 +559,6 @@ namespace TaskFlow.Migrations
                     b.Navigation("Status");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("TaskFlow.Models.ProjectStatus", b =>
-                {
-                    b.HasOne("TaskFlow.Models.Project", "Project")
-                        .WithMany("Statuses")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("TaskFlow.Models.ProjectUserGroup", b =>
@@ -585,15 +593,15 @@ namespace TaskFlow.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TaskFlow.Models.ApplicationUser", "Reporter")
-                        .WithMany("CreatedTickets")
-                        .HasForeignKey("ReporterId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("TaskFlow.Models.ProjectStatus", "Status")
                         .WithMany("Tickets")
                         .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskFlow.Models.ApplicationUser", "Reporter")
+                        .WithMany("CreatedTickets")
+                        .HasForeignKey("ReporterId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -601,20 +609,20 @@ namespace TaskFlow.Migrations
 
                     b.Navigation("Project");
 
-                    b.Navigation("Reporter");
-
                     b.Navigation("Status");
+
+                    b.Navigation("Reporter");
                 });
 
             modelBuilder.Entity("TaskFlow.Models.ApplicationUser", b =>
                 {
                     b.Navigation("AssignedTickets");
 
+                    b.Navigation("KanbanColumnPreferences");
+
                     b.Navigation("Comments");
 
                     b.Navigation("CreatedTickets");
-
-                    b.Navigation("KanbanColumnPreferences");
 
                     b.Navigation("ProjectAssignments");
                 });
@@ -626,13 +634,6 @@ namespace TaskFlow.Migrations
                     b.Navigation("KanbanColumnPreferences");
 
                     b.Navigation("Statuses");
-
-                    b.Navigation("Tickets");
-                });
-
-            modelBuilder.Entity("TaskFlow.Models.ProjectStatus", b =>
-                {
-                    b.Navigation("ColumnPreferences");
 
                     b.Navigation("Tickets");
                 });

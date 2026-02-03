@@ -9,27 +9,28 @@
         <a v-if="project" :href="'/projects/' + projectId" class="btn btn-secondary" style="margin-right: 1rem;">{{ t('Project.TaskList') }}</a>
         <h1 v-if="project">{{ project.key }} – {{ project.name }}</h1>
         <button class="btn btn-primary" @@click="showCreateTicket = true">{{ t('Project.NewTask') }}</button>
+        <button class="btn btn-secondary" style="margin-left: 0.5rem;" @@click="openColumnsModal">{{ t('Project.ManageColumns') }}</button>
     </div>
     <div v-if="loading" class="loading">{{ t('Projects.Loading') }}</div>
     <div v-if="error" class="error">{{ error }}</div>
     <div class="kanban-board" v-show="!loading && !error">
         <div
-            v-for="col in columns"
-            :key="col.type"
+            v-for="col in visibleColumns"
+            :key="col.statusId"
             class="kanban-column"
-            :data-type="col.type"
-            @@dragover.prevent="onDragOver($event, col.type)"
+            :data-status="col.statusId"
+            @@dragover.prevent="onDragOver($event, col.statusId)"
             @@dragleave="onDragLeave($event)"
-            @@drop="onDrop($event, col.type)"
-            :class="{ 'kanban-column--drag-over': dragOverColumn === col.type }"
+            @@drop="onDrop($event, col.statusId)"
+            :class="{ 'kanban-column--drag-over': dragOverColumn === col.statusId }"
         >
             <div class="kanban-column-header">
-                <span class="kanban-column-title">{{ col.label }}</span>
-                <span class="kanban-column-count">{{ ticketsByType(col.type).length }}</span>
+                <span class="kanban-column-title">{{ col.statusName }}</span>
+                <span class="kanban-column-count">{{ ticketsByStatus(col.statusId).length }}</span>
             </div>
             <div class="kanban-column-cards">
                 <a
-                    v-for="ticket in ticketsByType(col.type)"
+                    v-for="ticket in ticketsByStatus(col.statusId)"
                     :key="ticket.id"
                     :href="'/tickets/' + ticket.key"
                     class="kanban-card"
@@ -38,7 +39,7 @@
                     @@dragend="onDragEnd"
                 >
                     <span class="kanban-card-key">{{ ticket.key }}</span>
-                    <span :class="'badge badge-' + statusClass(ticket.status)" class="kanban-card-status">{{ statusLabel(ticket.status) }}</span>
+                    <span :class="'badge badge-' + statusClass(ticket.statusId)" class="kanban-card-status">{{ ticket.statusName || fallbackStatusName(ticket.statusId) }}</span>
                     <span :class="'badge badge-' + priorityClass(ticket.priority)" class="kanban-card-priority">{{ priorityLabel(ticket.priority) }}</span>
                     <div class="kanban-card-title">{{ ticket.title }}</div>
                     <div class="kanban-card-meta">{{ ticket.assigneeName || t('Ticket.Unassigned') }}</div>
@@ -90,25 +91,54 @@
             </div>
         </div>
     </div>
+
+    <div v-if="showColumnsModal" class="modal-overlay" @@click.self="showColumnsModal = false">
+        <div class="modal">
+            <h2>{{ t('Project.ColumnSettings') }}</h2>
+            <div class="form-group">
+                <label>{{ t('Project.AddStatus') }}</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input v-model="newStatusName" :placeholder="t('Project.StatusNamePlaceholder')" />
+                    <button class="btn btn-secondary" @@click="createStatus">{{ t('Projects.Create') }}</button>
+                </div>
+            </div>
+            <div v-if="editableColumns.length === 0" style="color: var(--text-muted);">{{ t('Project.NoColumns') }}</div>
+            <div v-else class="card" style="padding: 0.5rem;">
+                <div v-for="(col, idx) in editableColumns" :key="col.statusId" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0;">
+                    <input type="checkbox" v-model="col.isVisible" />
+                    <span style="flex: 1;">{{ col.statusName }}</span>
+                    <button class="btn btn-secondary btn-sm" @@click="moveColumn(idx, -1)" :disabled="idx === 0">↑</button>
+                    <button class="btn btn-secondary btn-sm" @@click="moveColumn(idx, 1)" :disabled="idx === editableColumns.length - 1">↓</button>
+                    <button class="btn btn-danger btn-sm" @@click="deleteStatus(col)">{{ t('Project.DeleteStatus') }}</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @@click="showColumnsModal = false">{{ t('Projects.Cancel') }}</button>
+                <button class="btn btn-primary" @@click="saveColumns">{{ t('Project.SaveColumns') }}</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
 <script>
 const projectId = @Model;
 const { createApp } = Vue;
-const statusKeys = { 0: 'Ticket.StatusToDo', 1: 'Ticket.StatusInProgress', 2: 'Ticket.StatusInReview', 3: 'Ticket.StatusDone' };
 const priorityKeys = { 0: 'Ticket.PriorityLowest', 1: 'Ticket.PriorityLow', 2: 'Ticket.PriorityMedium', 3: 'Ticket.PriorityHigh', 4: 'Ticket.PriorityHighest' };
-const typeKeys = { 0: 'Ticket.TypeTask', 1: 'Ticket.TypeBug', 2: 'Ticket.TypeFeature', 3: 'Ticket.TypeOther' };
 createApp({
     data() {
         return {
             projectId,
             project: null,
             tickets: [],
+            columns: [],
             users: [],
             loading: true,
             error: null,
             showCreateTicket: false,
+            showColumnsModal: false,
+            newStatusName: '',
+            editableColumns: [],
             newTicket: { title: '', description: '', type: 0, priority: 2, assigneeId: null },
             dragOverColumn: null,
             draggedTicket: null,
@@ -116,13 +146,10 @@ createApp({
         };
     },
     computed: {
-        columns() {
-            return [
-                { type: 0, label: this.t('Ticket.TypeTask') },
-                { type: 1, label: this.t('Ticket.TypeBug') },
-                { type: 2, label: this.t('Ticket.TypeFeature') },
-                { type: 3, label: this.t('Ticket.TypeOther') }
-            ];
+        visibleColumns() {
+            return this.columns
+                .filter(c => c.isVisible)
+                .sort((a, b) => a.position - b.position);
         }
     },
     mounted() {
@@ -142,45 +169,66 @@ createApp({
             args.forEach((val, i) => { s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), val); });
             return s;
         },
-        normalizeType(v) {
+        normalizeStatusId(v) {
             const n = typeof v === 'string' ? parseInt(v, 10) : Number(v);
-            if (Number.isNaN(n) || n < 0 || n > 3) return 0;
-            return n;
+            return Number.isNaN(n) ? 0 : n;
         },
-        ticketsByType(type) {
-            return this.tickets.filter(t => this.normalizeType(t.type) === type);
+        ticketsByStatus(statusId) {
+            return this.tickets.filter(t => this.normalizeStatusId(t.statusId) === statusId);
         },
-        statusLabel(s) { return this.t(statusKeys[this.normalizeStatus(s)] ?? 'Ticket.StatusToDo'); },
-        statusClass(s) {
+        statusClass(statusId) {
+            const sorted = this.visibleColumns;
+            const index = sorted.findIndex(c => c.statusId === statusId);
             const c = { 0: 'todo', 1: 'progress', 2: 'review', 3: 'done' };
-            return c[this.normalizeStatus(s)] ?? 'todo';
+            return c[index] ?? 'neutral';
         },
-        normalizeStatus(s) {
-            const n = typeof s === 'string' ? parseInt(s, 10) : Number(s);
-            if (Number.isNaN(n) || n < 0 || n > 3) return 0;
-            return n;
+        fallbackStatusName(statusId) {
+            const col = this.columns.find(c => c.statusId === statusId);
+            return col ? col.statusName : this.t('Ticket.Status');
         },
         priorityLabel(p) { return this.t(priorityKeys[p] ?? 'Ticket.PriorityMedium'); },
         priorityClass(p) {
             const c = { 0: 'lowest', 1: 'low', 2: 'medium', 3: 'high', 4: 'highest' };
             return c[p] ?? 'medium';
         },
+        openColumnsModal() {
+            this.editableColumns = this.columns
+                .slice()
+                .sort((a, b) => a.position - b.position)
+                .map(c => ({ ...c }));
+            this.showColumnsModal = true;
+        },
+        moveColumn(index, delta) {
+            const target = index + delta;
+            if (target < 0 || target >= this.editableColumns.length) return;
+            const tmp = this.editableColumns[index];
+            this.editableColumns[index] = this.editableColumns[target];
+            this.editableColumns[target] = tmp;
+        },
         async load() {
             try {
                 this.loading = true;
                 this.error = null;
-                const [pRes, tRes] = await Promise.all([
+                const [pRes, tRes, cRes] = await Promise.all([
                     fetch('/api/ProjectsApi/' + projectId),
-                    fetch('/api/TicketsApi?projectId=' + projectId)
+                    fetch('/api/TicketsApi?projectId=' + projectId),
+                    fetch('/api/KanbanApi/project/' + projectId + '/columns')
                 ]);
                 if (!pRes.ok) throw new Error(this.t('Project.ErrorLoad'));
                 if (!tRes.ok) throw new Error(this.t('Project.ErrorLoadTickets'));
+                if (!cRes.ok) throw new Error(this.t('Project.ErrorLoad'));
                 this.project = await pRes.json();
                 const rawTickets = await tRes.json();
                 this.tickets = rawTickets.map(t => ({
                     ...t,
-                    status: this.normalizeStatus(t.status),
-                    type: this.normalizeType(t.type)
+                    statusId: this.normalizeStatusId(t.statusId)
+                }));
+                const cols = await cRes.json();
+                this.columns = cols.map(c => ({
+                    statusId: this.normalizeStatusId(c.statusId),
+                    statusName: c.statusName,
+                    position: c.position,
+                    isVisible: c.isVisible
                 }));
             } catch (e) {
                 this.error = e.message;
@@ -200,7 +248,7 @@ createApp({
             this.dragOverColumn = null;
         },
         onDragOver(ev, type) {
-            if (this.draggedTicket && this.normalizeType(this.draggedTicket.type) !== type) {
+            if (this.draggedTicket && this.normalizeStatusId(this.draggedTicket.statusId) !== type) {
                 this.dragOverColumn = type;
             }
         },
@@ -215,15 +263,16 @@ createApp({
             const ticketId = ev.dataTransfer.getData('text/plain');
             if (!ticketId || !this.draggedTicket) return;
             const ticket = this.tickets.find(t => t.id === parseInt(ticketId, 10));
-            if (!ticket || this.normalizeType(ticket.type) === newType) return;
+            if (!ticket || this.normalizeStatusId(ticket.statusId) === newType) return;
             try {
                 const r = await fetch('/api/TicketsApi/' + ticketId, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: newType })
+                    body: JSON.stringify({ statusId: newType })
                 });
                 if (!r.ok) throw new Error(this.t('Ticket.ErrorUpdate'));
-                ticket.type = newType;
+                ticket.statusId = newType;
+                ticket.statusName = this.fallbackStatusName(newType);
             } catch (e) {
                 alert(e.message);
             }
@@ -248,6 +297,62 @@ createApp({
                 this.showCreateTicket = false;
                 this.newTicket = { title: '', description: '', type: 0, priority: 2, assigneeId: null };
                 await this.load();
+            } catch (e) {
+                alert(e.message);
+            }
+        },
+        async createStatus() {
+            const name = this.newStatusName.trim();
+            if (!name) return;
+            try {
+                const r = await fetch('/api/KanbanApi/project/' + projectId + '/statuses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (!r.ok) throw new Error(await r.text());
+                this.newStatusName = '';
+                await this.load();
+                this.openColumnsModal();
+            } catch (e) {
+                alert(e.message);
+            }
+        },
+        async deleteStatus(col) {
+            if (!confirm(this.t('Project.ConfirmDeleteStatus', col.statusName))) return;
+            try {
+                const r = await fetch('/api/KanbanApi/project/' + projectId + '/statuses/' + col.statusId, {
+                    method: 'DELETE'
+                });
+                if (!r.ok) throw new Error(await r.text());
+                await this.load();
+                this.openColumnsModal();
+            } catch (e) {
+                alert(e.message);
+            }
+        },
+        async saveColumns() {
+            const normalized = this.editableColumns.map((c, idx) => ({
+                statusId: c.statusId,
+                statusName: c.statusName,
+                position: idx,
+                isVisible: !!c.isVisible
+            }));
+            try {
+                const r = await fetch('/api/KanbanApi/project/' + projectId + '/columns', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ columns: normalized })
+                });
+                if (!r.ok) throw new Error(await r.text());
+                const cols = await r.json();
+                this.columns = cols.map(c => ({
+                    statusId: this.normalizeStatusId(c.statusId),
+                    statusName: c.statusName,
+                    position: c.position,
+                    isVisible: c.isVisible
+                }));
+                this.showColumnsModal = false;
             } catch (e) {
                 alert(e.message);
             }

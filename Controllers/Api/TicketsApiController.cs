@@ -8,10 +8,11 @@ namespace TaskFlow.Controllers.Api;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class TicketsApiController(ITicketService ticketService, IProjectService projectService, UserManager<ApplicationUser> userManager) : ControllerBase
+public class TicketsApiController(ITicketService ticketService, IProjectService projectService, IKanbanService kanbanService, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     private readonly ITicketService _ticketService = ticketService;
     private readonly IProjectService _projectService = projectService;
+    private readonly IKanbanService _kanbanService = kanbanService;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
 
     [HttpGet]
@@ -86,6 +87,12 @@ public class TicketsApiController(ITicketService ticketService, IProjectService 
         
         if (!hasAccess) return Forbid();
 
+        int statusId = req.StatusId ?? await _kanbanService.GetDefaultStatusIdAsync(req.ProjectId);
+        if (req.StatusId.HasValue)
+        {
+            ProjectStatus? status = await _kanbanService.GetStatusAsync(req.ProjectId, req.StatusId.Value);
+            if (status == null) return BadRequest("Invalid status.");
+        }
         Ticket ticket = new Ticket
         {
             Title = req.Title,
@@ -94,7 +101,8 @@ public class TicketsApiController(ITicketService ticketService, IProjectService 
             ReporterId = currentUser.Id,
             AssigneeId = req.AssigneeId,
             Type = req.Type,
-            Priority = req.Priority
+            Priority = req.Priority,
+            StatusId = statusId
         };
         Ticket created = await _ticketService.CreateAsync(ticket);
         return CreatedAtAction(nameof(GetByKey), new { key = created.Key }, created.ToDto());
@@ -114,7 +122,13 @@ public class TicketsApiController(ITicketService ticketService, IProjectService 
         
         if (!hasAccess) return Forbid();
 
-        Ticket? t = await _ticketService.UpdateAsync(id, req.Title, req.Description, req.Type, req.Status, req.Priority, req.AssigneeId);
+        if (req.StatusId.HasValue)
+        {
+            ProjectStatus? status = await _kanbanService.GetStatusAsync(ticket.ProjectId, req.StatusId.Value);
+            if (status == null) return BadRequest("Invalid status.");
+        }
+
+        Ticket? t = await _ticketService.UpdateAsync(id, req.Title, req.Description, req.Type, req.StatusId, req.Priority, req.AssigneeId);
         if (t == null) return NotFound();
         Ticket? full = await _ticketService.GetByIdAsync(id);
         return Ok((full ?? t).ToDto());

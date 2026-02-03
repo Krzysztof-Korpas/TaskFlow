@@ -196,6 +196,7 @@ label {
 .badge-progress { background: var(--accent); color: #ffffff; }
 .badge-review { background: var(--warning); color: #000000; }
 .badge-done { background: var(--success); color: #ffffff; }
+.badge-neutral { background: #2f2f2f; color: #e6e6e6; }
 
 .priority-lowest, .priority-low { color: #b0b0b0; }
 .priority-medium { color: #fbbf24; }

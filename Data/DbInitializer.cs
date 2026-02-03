@@ -50,6 +50,18 @@ public static class DbInitializer
         db.Projects.Add(project);
         await db.SaveChangesAsync();
 
+        List<ProjectStatus> statuses =
+        [
+            new ProjectStatus { ProjectId = project.Id, Name = "Do zrobienia", SortOrder = 0, IsDefault = true },
+            new ProjectStatus { ProjectId = project.Id, Name = "W toku", SortOrder = 1, IsDefault = false },
+            new ProjectStatus { ProjectId = project.Id, Name = "Do przeglądu", SortOrder = 2, IsDefault = false },
+            new ProjectStatus { ProjectId = project.Id, Name = "Zrobione", SortOrder = 3, IsDefault = false }
+        ];
+        db.ProjectStatuses.AddRange(statuses);
+        await db.SaveChangesAsync();
+
+        int defaultStatusId = statuses.First(s => s.IsDefault).Id;
+
         Ticket ticket = new ()
         {
             Key = "DEMO-1",
@@ -57,7 +69,7 @@ public static class DbInitializer
             Description = "To jest przykładowe zadanie.",
             ProjectId = project.Id,
             ReporterId = admin.Id,
-            Status = TicketStatus.ToDo,
+            StatusId = defaultStatusId,
             Priority = TicketPriority.Medium
         };
         db.Tickets.Add(ticket);
