@@ -21,16 +21,16 @@
         <div class="modal">
             <h2>{{ t('Projects.NewProject') }}</h2>
             <div class="form-group">
-                <label>{{ t('Projects.KeyLabel') }}</label>
-                <input v-model="newProject.key" :placeholder="t('Projects.KeyPlaceholder')" maxlength="10" />
+                <label for="project_key">{{ t('Projects.KeyLabel') }}</label>
+                <input id="project_key" v-model="newProject.key" :placeholder="t('Projects.KeyPlaceholder')" maxlength="10" />
             </div>
             <div class="form-group">
-                <label>{{ t('Projects.NameLabel') }}</label>
-                <input v-model="newProject.name" :placeholder="t('Projects.NamePlaceholder')" />
+                <label for="project_name">{{ t('Projects.NameLabel') }}</label>
+                <input id="project_name" v-model="newProject.name" :placeholder="t('Projects.NamePlaceholder')" />
             </div>
             <div class="form-group">
-                <label>{{ t('Projects.DescriptionLabel') }}</label>
-                <textarea v-model="newProject.description" rows="2" :placeholder="t('Projects.DescriptionPlaceholder')"></textarea>
+                <label for="project_desc">{{ t('Projects.DescriptionLabel') }}</label>
+                <textarea id="project_desc" v-model="newProject.description" rows="2" :placeholder="t('Projects.DescriptionPlaceholder')"></textarea>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" @@click="showCreateModal = false">{{ t('Projects.Cancel') }}</button>

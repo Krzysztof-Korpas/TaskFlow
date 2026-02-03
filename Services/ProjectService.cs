@@ -59,7 +59,7 @@ public class ProjectService(ApplicationDbContext db) : IProjectService
         
         if (exists) return false;
 
-        ProjectUserGroup projectUserGroup = new ProjectUserGroup
+        ProjectUserGroup projectUserGroup = new ()
         {
             ProjectId = projectId,
             UserId = userId

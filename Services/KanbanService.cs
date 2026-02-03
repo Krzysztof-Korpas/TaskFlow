@@ -118,70 +118,92 @@ public class KanbanService(ApplicationDbContext db) : IKanbanService
             await _db.SaveChangesAsync();
         }
 
-        return prefs.OrderBy(p => p.Position).ToList();
+        return [.. prefs.OrderBy(p => p.Position)];
     }
 
     public async Task SaveUserColumnsAsync(int projectId, int userId, List<KanbanColumnPreference> columns)
     {
         List<ProjectStatus> statuses = await GetProjectStatusesAsync(projectId);
-        HashSet<int> statusIds = statuses.Select(s => s.Id).ToHashSet();
-
         List<KanbanColumnPreference> existing = await _db.KanbanColumnPreferences
             .Where(p => p.ProjectId == projectId && p.UserId == userId)
             .ToListAsync();
 
         int maxPosition = columns.Count == 0 ? -1 : columns.Max(c => c.Position);
 
+        Dictionary<int, KanbanColumnPreference> incomingByStatusId = columns
+            .GroupBy(c => c.StatusId)
+            .ToDictionary(g => g.Key, g => g.First());
+        Dictionary<int, KanbanColumnPreference> existingByStatusId = existing
+            .GroupBy(p => p.StatusId)
+            .ToDictionary(g => g.Key, g => g.First());
+
         foreach (ProjectStatus status in statuses)
         {
-            KanbanColumnPreference? incoming = columns.FirstOrDefault(c => c.StatusId == status.Id);
-            KanbanColumnPreference? current = existing.FirstOrDefault(p => p.StatusId == status.Id);
+            incomingByStatusId.TryGetValue(status.Id, out KanbanColumnPreference? incoming);
+            existingByStatusId.TryGetValue(status.Id, out KanbanColumnPreference? current);
             if (incoming == null)
             {
-                if (current == null)
-                {
-                    existing.Add(new KanbanColumnPreference
-                    {
-                        ProjectId = projectId,
-                        UserId = userId,
-                        StatusId = status.Id,
-                        Position = ++maxPosition,
-                        IsVisible = false
-                    });
-                }
-                else
-                {
-                    current.IsVisible = false;
-                    if (current.Position < 0)
-                        current.Position = ++maxPosition;
-                }
+                ApplyMissingIncoming(existing, projectId, userId, status.Id, current, ref maxPosition);
                 continue;
             }
 
-            if (!statusIds.Contains(incoming.StatusId)) continue;
-
-            if (current == null)
-            {
-                existing.Add(new KanbanColumnPreference
-                {
-                    ProjectId = projectId,
-                    UserId = userId,
-                    StatusId = incoming.StatusId,
-                    Position = incoming.Position,
-                    IsVisible = incoming.IsVisible
-                });
-            }
-            else
-            {
-                current.Position = incoming.Position;
-                current.IsVisible = incoming.IsVisible;
-            }
+            ApplyIncoming(existing, projectId, userId, incoming, current);
         }
 
-        List<KanbanColumnPreference> newEntries = existing.Where(p => p.Id == 0).ToList();
+        List<KanbanColumnPreference> newEntries = [..existing.Where(p => p.Id == 0)];
         if (newEntries.Count > 0)
             _db.KanbanColumnPreferences.AddRange(newEntries);
 
         await _db.SaveChangesAsync();
+    }
+
+    private static void ApplyMissingIncoming(
+        List<KanbanColumnPreference> existing,
+        int projectId,
+        int userId,
+        int statusId,
+        KanbanColumnPreference? current,
+        ref int maxPosition)
+    {
+        if (current == null)
+        {
+            existing.Add(new KanbanColumnPreference
+            {
+                ProjectId = projectId,
+                UserId = userId,
+                StatusId = statusId,
+                Position = ++maxPosition,
+                IsVisible = false
+            });
+            return;
+        }
+
+        current.IsVisible = false;
+        if (current.Position < 0)
+            current.Position = ++maxPosition;
+    }
+
+    private static void ApplyIncoming(
+        List<KanbanColumnPreference> existing,
+        int projectId,
+        int userId,
+        KanbanColumnPreference incoming,
+        KanbanColumnPreference? current)
+    {
+        if (current == null)
+        {
+            existing.Add(new KanbanColumnPreference
+            {
+                ProjectId = projectId,
+                UserId = userId,
+                StatusId = incoming.StatusId,
+                Position = incoming.Position,
+                IsVisible = incoming.IsVisible
+            });
+            return;
+        }
+
+        current.Position = incoming.Position;
+        current.IsVisible = incoming.IsVisible;
     }
 }

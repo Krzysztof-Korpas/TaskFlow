@@ -3,23 +3,17 @@ using RabbitMQ.Client;
 
 namespace TaskFlow.Services;
 
-public class RabbitMqService : IRabbitMqService, IDisposable
+public class RabbitMqService(IConfiguration config, ILogger<RabbitMqService> logger) : IRabbitMqService, IDisposable
 {
-    private readonly IConnection _connection;
-    private readonly ILogger<RabbitMqService> _logger;
-
-    public RabbitMqService(IConfiguration config, ILogger<RabbitMqService> logger)
+    private readonly IConnection _connection = (new ConnectionFactory()
     {
-        _logger = logger;
-        ConnectionFactory factory = new ConnectionFactory
-        {
-            HostName = config["RabbitMQ:HostName"] ?? "localhost",
-            Port = int.TryParse(config["RabbitMQ:Port"], out int port) ? port : 5672,
-            UserName = config["RabbitMQ:UserName"] ?? "guest",
-            Password = config["RabbitMQ:Password"] ?? "guest"
-        };
-        _connection = factory.CreateConnection();
-    }
+        HostName = config["RabbitMQ:HostName"] ?? "localhost",
+        Port = int.TryParse(config["RabbitMQ:Port"], out int port) ? port : 5672,
+        UserName = config["RabbitMQ:UserName"] ?? "guest",
+        Password = config["RabbitMQ:Password"] ?? "guest"
+    }).CreateConnection();
+    private readonly ILogger<RabbitMqService> _logger = logger;
+
 
     public void EnsureExchangeAndQueue(string exchange, string queue, string routingKey)
     {
